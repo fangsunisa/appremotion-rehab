@@ -39,15 +39,32 @@ class _ProgramState extends State<Program> {
   // ฟังก์ชันยิง API ไปดึงโปรแกรมจาก Node.js Backend
   Future<void> fetchPatientProgram(String patientId) async {
     final String url = '${ApiConfig.baseUrl}/api/patient/program/$patientId';
+    final String progressUrl =
+        '${ApiConfig.baseUrl}/api/patient/progress/$patientId';
 
     try {
+      // 1. ดึงโปรแกรมกายภาพ
       final response = await http.get(Uri.parse(url));
+      // 2. ดึงข้อมูล progress เพื่อเช็กว่าวันนี้ทำหรือยัง
+      final progressResponse = await http.get(Uri.parse(progressUrl));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
+
+        int todayCompletedReps = 0;
+        // ถ้าดึง progress สำเร็จ และวันนี้ทำเสร็จแล้ว (percentage == 100)
+        if (progressResponse.statusCode == 200) {
+          final progressData = jsonDecode(progressResponse.body);
+          if (progressData['isTodayCompleted'] == true) {
+            todayCompletedReps =
+                data.length; // กำหนดให้ทำครบทุกท่าตามจำนวนโปรแกรม
+          }
+        }
         setState(() {
           programList = data;
           hasProgram = data.isNotEmpty;
+          completedExerciseCount =
+              todayCompletedReps; // 👉 อัปเดตสถานะว่าวันนี้ทำเสร็จหรือยัง
           isLoading = false;
         });
       } else {
@@ -160,8 +177,7 @@ class _ProgramState extends State<Program> {
           });
 
           if (index == 0) {
-            // 👉 [จุดที่แก้]: อยู่หน้า Home แล้ว ไม่ต้องสั่ง fetchPatientProgram ซ้ำ
-            // เพื่อป้องกันไม่ให้ข้อมูลที่ทำค้างไว้ (เช่น 1/2) ถูกรีเซ็ตเป็น 0
+            // อยู่หน้า Home แล้ว
           } else if (index == 1) {
             final result = await Navigator.push(
               context,
@@ -274,6 +290,10 @@ class _ProgramState extends State<Program> {
       );
     }).toList();
 
+    // เช็กว่าทำครบทุกท่าแล้วหรือยัง
+    bool isAllCompleted =
+        programList.isNotEmpty && completedExerciseCount >= programList.length;
+
     return Column(
       children: [
         // 1. กล่องสรุปด้านบน
@@ -326,47 +346,51 @@ class _ProgramState extends State<Program> {
                     ],
                   ),
                   ElevatedButton(
-                    onPressed: () async {
-                      // 👉 [จุดที่แก้]: รอรับค่าที่ส่งกลับมาจากหน้า ExerciseScreen ตอนกดออก/กลับมา
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ExerciseScreen(
-                            prescriptions: prescriptions,
-                            patientId: widget.patientId,
-                            patientName: widget.patientName,
-                            onExerciseFinished: (completedCount) {
+                    onPressed: isAllCompleted
+                        ? null // ถ้าทำครบแล้ว ปิดการกดปุ่ม
+                        : () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ExerciseScreen(
+                                  prescriptions: prescriptions,
+                                  patientId: widget.patientId,
+                                  patientName: widget.patientName,
+                                  onExerciseFinished: (completedCount) {
+                                    setState(() {
+                                      completedExerciseCount = completedCount;
+                                    });
+                                  },
+                                  onComplete: () {
+                                    setState(() {
+                                      completedExerciseCount =
+                                          programList.length;
+                                    });
+                                  },
+                                ),
+                              ),
+                            );
+                            if (result != null && result is int) {
                               setState(() {
-                                completedExerciseCount = completedCount;
+                                completedExerciseCount = result;
                               });
-                            },
-                            onComplete: () {
-                              setState(() {
-                                completedExerciseCount = programList.length;
-                              });
-                              Navigator.pop(context);
-                            },
-                          ),
-                        ),
-                      );
-
-                      // 👉 [จุดที่เพิ่ม]: พอกลับมาหน้าหลัก ให้เช็กและอัปเดตสถานะหน้าจอทันที
-                      if (result != null && result is int) {
-                        setState(() {
-                          completedExerciseCount = result;
-                        });
-                      }
-                    },
+                            }
+                            fetchPatientProgram(widget.patientId);
+                          },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4285F4),
+                      backgroundColor: isAllCompleted
+                          ? Colors.grey
+                          : const Color(0xFF4285F4),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
                       elevation: 0,
                     ),
-                    child: const Text(
-                      'เริ่มเลย',
-                      style: TextStyle(
+                    child: Text(
+                      isAllCompleted
+                          ? 'เสร็จสิ้นแล้ว'
+                          : 'เริ่มเลย', // 👉 เปลี่ยนข้อความตามสถานะการทำครบ
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),

@@ -206,12 +206,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   // ฟังก์ชันเลือกสีการ์ดตามระดับความเจ็บปวด/อาการ
   Color _getStatusColor(String status) {
-    if (status.contains('เจ็บมาก') || status.contains('ตึงมาก')) {
-      return const Color(0xFFDCEDC8); // เขียวอ่อน / เหลืองอ่อน
-    } else if (status.contains('สบาย')) {
-      return const Color(0xFFF8BBD0); // ชมพูอ่อน
+    // ตัดช่องว่างหรือเช็กข้อความแบบตรงตัว
+    String cleanStatus = status.trim();
+
+    if (cleanStatus.contains('สบายมาก')) {
+      return const Color(0xFFF8BBD0); // สีชมพูอ่อน (ตามรูปขวา)
+    } else if (cleanStatus.contains('ตึงมาก')) {
+      return const Color(0xFFDCEDC8); // สีเขียวอ่อน (ตามรูปขวา)
+    } else if (cleanStatus.contains('เจ็บมาก')) {
+      return const Color(0xFFFFF9C4); // สีเหลืองครีม/ส้มอ่อน (ตามรูปขวา)
     }
-    return const Color(0xFFF2EBBF); // สีเหลืองนวล
+
+    return const Color(0xFFF2EBBF); // สีสำรองเริ่มต้น
   }
 
   Widget _buildMonthHeader(String title) {

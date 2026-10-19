@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:http/http.dart' as http;
 
+import 'dart:convert';
+
+import 'api_config.dart'; // นำเข้าตั้งค่า URL ของ Backend
 import 'progress_analytics.dart'; // นำเข้าหน้า Progress เพื่อเชื่อมโยงกลับไปได้
 
 class ChatMessage {
@@ -14,9 +18,18 @@ class ChatMessage {
 class Chat extends StatefulWidget {
   final String patientId;
   final String patientName;
+  final int completedReps;
+  final int completedSets;
+  final String timeSpent;
 
-  const Chat({Key? key, required this.patientId, required this.patientName})
-    : super(key: key);
+  const Chat({
+    Key? key,
+    required this.patientId,
+    required this.patientName,
+    this.completedReps = 0, // 👈 กำหนดค่าเริ่มต้น
+    this.completedSets = 0, // 👈 กำหนดค่าเริ่มต้น
+    this.timeSpent = '00:00:00', // 👈 กำหนดค่าเริ่มต้น
+  }) : super(key: key);
 
   @override
   State<Chat> createState() => ChatState();
@@ -54,7 +67,12 @@ class ChatState extends State<Chat> {
     await _flutterTts.setVolume(1.0);
     await _flutterTts.setPitch(1.0);
 
-    _speak(messages[0].text);
+    // หน่วงเวลา 0.8 วินาที เพื่อรอให้หน้า Chat โหลดเสร็จเรียบร้อยก่อน ค่อยพูดข้อความต้อนรับอันแรก
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        _speak(messages[0].text);
+      }
+    });
   }
 
   Future<void> _speak(String text) async {
@@ -296,13 +314,50 @@ class ChatState extends State<Chat> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         print('บันทึกข้อมูล: $selectedFeeling');
+
+                        // ค้นหาข้อความของ User ล่าสุดในลิสต์ messages มาทำเป็น note จริงๆ
+                        String userNote = '';
+                        for (var i = messages.length - 1; i >= 0; i--) {
+                          if (!messages[i].isBot) {
+                            userNote = messages[i].text;
+                            break;
+                          }
+                        }
+
+                        // ยิง API ไปบันทึกข้อมูลลง Backend (ตาราง Pain_Assessment และ Session)
+                        final String url =
+                            '${ApiConfig.baseUrl}/api/patient/pain-assessment';
+                        try {
+                          await http.post(
+                            Uri.parse(url),
+                            headers: {'Content-Type': 'application/json'},
+                            body: jsonEncode({
+                              'patientId': widget.patientId,
+                              'feeling': selectedFeeling,
+                              'note': userNote,
+                              'completedReps': widget
+                                  .completedReps, // 👈 ส่งค่า reps ที่รับมา
+                              'completedSets': widget
+                                  .completedSets, // 👈 ส่งค่า sets ที่รับมา
+                              'timeSpent':
+                                  widget.timeSpent, // 👈 ส่งค่าเวลาที่รับมา
+                            }),
+                          );
+                        } catch (e) {
+                          print('เกิดข้อผิดพลาดในการบันทึก: $e');
+                        }
+
+                        // ส่ง patientId และ patientName กลับไปที่หน้า Progress เพื่อให้อัปเดตสีตามวันที่ทำ
+                        if (!mounted) return;
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
-                                const ProgressAnalyticsScreen(),
+                            builder: (context) => ProgressAnalyticsScreen(
+                              patientId: widget.patientId,
+                              patientName: widget.patientName,
+                            ),
                           ),
                         );
                       },

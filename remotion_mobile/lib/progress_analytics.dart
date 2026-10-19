@@ -56,6 +56,19 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
     fetchProgressData();
   }
 
+  // 👉 เพิ่มฟังก์ชันแยกสีกล่องตามสถานะอาการตรงนี้ครับ
+  Color _getLogCardColor(String status) {
+    String cleanStatus = status.trim();
+    if (cleanStatus.contains('สบายมาก')) {
+      return const Color(0xFFF8BBD0); // สีชมพูอ่อน
+    } else if (cleanStatus.contains('ตึงมาก')) {
+      return const Color(0xFFDCEDC8); // สีเขียวอ่อน
+    } else if (cleanStatus.contains('เจ็บมาก')) {
+      return const Color(0xFFFFF9C4); // สีเหลืองอ่อน
+    }
+    return const Color(0xFFDCEDC8); // สีสำรองเริ่มต้น
+  }
+
   // ฟังก์ชันดึงสถิติความก้าวหน้าและข้อมูลปฏิทินจาก Backend (MySQL)
   Future<void> fetchProgressData() async {
     int year = _currentMonth.year;
@@ -134,7 +147,7 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
               MaterialPageRoute(
                 builder: (context) => Program(
                   patientId: widget.patientId,
-                  patientName: widget.patientName, // 👈 ส่งชื่อกลับไปด้วย
+                  patientName: widget.patientName,
                 ),
               ),
             );
@@ -144,8 +157,7 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
               MaterialPageRoute(
                 builder: (context) => HistoryScreen(
                   patientId: widget.patientId,
-                  patientName:
-                      widget.patientName, // 👈 ส่งชื่อพ่วงไปหน้า History ด้วย
+                  patientName: widget.patientName,
                 ),
               ),
             );
@@ -191,7 +203,7 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
                 MaterialPageRoute(
                   builder: (context) => Program(
                     patientId: widget.patientId,
-                    patientName: widget.patientName, // 👈 ส่งชื่อกลับไปด้วย
+                    patientName: widget.patientName,
                   ),
                 ),
               );
@@ -523,7 +535,7 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
           MaterialPageRoute(
             builder: (context) => HistoryScreen(
               patientId: widget.patientId,
-              patientName: widget.patientName, // 👈 ส่งชื่อไปด้วย
+              patientName: widget.patientName,
             ),
           ),
         );
@@ -542,13 +554,16 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
               )
             : Column(
                 children: recentLogs.map((log) {
+                  String statusText = log['status'] ?? '-';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _buildLogItem(
                       date: log['date'] ?? '-',
-                      status: log['status'] ?? '-',
+                      status: statusText,
                       detail: log['detail'] ?? '',
-                      bgColor: const Color(0xFFDCEDC8),
+                      bgColor: _getLogCardColor(
+                        statusText,
+                      ), // 👈 เรียกใช้ฟังก์ชันเปลี่ยนสีตามสถานะแล้ว
                     ),
                   );
                 }).toList(),

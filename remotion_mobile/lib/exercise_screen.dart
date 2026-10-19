@@ -7,6 +7,7 @@ import 'package:flutter_mp_pose_landmarker/flutter_mp_pose_landmarker.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:video_player/video_player.dart';
 
+import 'program.dart';
 import '../chat.dart';
 import '../exercise_prescription.dart';
 
@@ -14,16 +15,16 @@ class ExerciseScreen extends StatefulWidget {
   final List<ExercisePrescription> prescriptions;
   final VoidCallback? onComplete;
   final Function(int)? onExerciseFinished;
-  final String patientId; // 👈 เพิ่มรับไอดีคนไข้
-  final String patientName; // 👈 เพิ่มรับชื่อคนไข้
+  final String patientId;
+  final String patientName;
 
   const ExerciseScreen({
     Key? key,
     required this.prescriptions,
     this.onComplete,
     this.onExerciseFinished,
-    this.patientId = '1', // 👈 ค่าดีฟอลต์เผื่อไว้
-    this.patientName = 'ผู้ป่วย', // 👈 ค่าดีฟอลต์เผื่อไว้
+    this.patientId = '1',
+    this.patientName = 'ผู้ป่วย',
   }) : super(key: key);
 
   @override
@@ -91,15 +92,20 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   }
 
   Future<void> _speak(String text, {bool force = false}) async {
-    if (text.isEmpty) return;
+    if (!mounted || text.trim().isEmpty) return;
     if (!force && text == _lastSpokenMessage) return;
     _lastSpokenMessage = text;
-    await _flutterTts.stop();
-    await Future.delayed(const Duration(milliseconds: 100));
-    await _flutterTts.speak(text);
+    try {
+      // รอให้เสียงเดิมหยุดก่อน
+      await _flutterTts.stop();
+
+      // พูดข้อความใหม่ และรอจนพูดจบ
+      await _flutterTts.speak(text);
+    } catch (e) {
+      debugPrint('TTS error: $e');
+    }
   }
 
-  // 🇹🇭 ฟังก์ชันแปลงชื่อท่าเป็นภาษาไทยเพื่อแสดงบน UI และเสียงพูด
   String _getThaiExerciseName(String englishName) {
     String name = englishName.toLowerCase();
     if (name.contains('calf') ||
@@ -126,7 +132,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     return prescription.exerciseName;
   }
 
-  // 🎬 โหลดวิดีโอตัวอย่างและเลือกไฟล์ตามชื่อท่าปัจจุบันอัตโนมัติ
   Future<void> _initializeVideo() async {
     await _flutterTts.stop();
     String exerciseName = prescription.exerciseName.toLowerCase();
@@ -385,7 +390,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     return false;
   }
 
-  // 🦵 ตัวตรวจจับท่ากางขาออกด้านข้าง (Side Leg Raise)
   bool _isLeftLegAbducted() {
     if (_landmarks.length < 33) return false;
     double kneeAngle = _calculateAngle(
@@ -432,7 +436,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     return isOutward && isLifted;
   }
 
-  // 🦵 ตัวตรวจจับท่างอเข่า / ท่าอื่นๆ (Hamstring Curls / Standing Knee Raise)
   bool _isLeftKneeFlexed() {
     if (_landmarks.length < 33) return false;
     return _calculateAngle(_landmarks[23], _landmarks[25], _landmarks[27]) <=
@@ -458,7 +461,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     bool isSideLeg =
         exerciseName.contains('side') || exerciseName.contains('กางขา');
 
-    // ตรวจสอบท่ายืนหรือการหันหน้าตามประเภทของท่า
     if (isSideLeg) {
       if (!_isFacingCamera()) {
         _stopHoldTimer();
@@ -497,7 +499,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
       return;
     }
 
-    // แยกตรรกะการเช็กการเคลื่อนไหวตามชื่อท่าจริง
     bool isCorrectPose = false;
     if (isSideLeg) {
       isCorrectPose = currentLeg == 'ซ้าย'
@@ -651,7 +652,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     _completeSet();
   }
 
-  // ✨ ฟังก์ชันที่แก้ไขให้ Await รอเสียงพูดจบก่อน ค่อยเปลี่ยนไปโหลดวิดีโอท่าถัดไป
   Future<void> _completeSet() async {
     _stopHoldTimer();
     completedSets++;
@@ -659,9 +659,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     String thaiName = _getThaiExerciseName(prescription.exerciseName);
 
     if (completedSets >= targetSet) {
-      // 🔄 เช็กว่ายังมีท่าถัดไปในลิสต์หรือไม่
       if (currentExerciseIndex < widget.prescriptions.length - 1) {
-        // 👉 ส่งจำนวนท่าที่ทำเสร็จแล้วกลับไปอัปเดตหน้าโปรแกรมทันทีแบบเรียลไทม์
         if (widget.onExerciseFinished != null) {
           widget.onExerciseFinished!(currentExerciseIndex + 1);
         }
@@ -672,17 +670,17 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
 
         if (!mounted) return;
         setState(() {
-          currentExerciseIndex++; // ขยับไปท่าถัดไปในลิสต์
+          currentExerciseIndex++;
           completedSets = 0;
           currentRep = 0;
           currentLeg = 'ซ้าย';
-          _initializeVideo(); // โหลดวิดีโอของท่าถัดไปหลังจากพูดจบสนิทแล้ว
+          _initializeVideo();
         });
         return;
       }
 
-      if (widget.onComplete != null) {
-        await _speak('ยอดเยี่ยมมากค่ะ ทำท่า $thaiName ครบแล้วค่ะ', force: true);
+      //if (widget.onComplete != null) {
+      /*await _speak('ยอดเยี่ยมมากค่ะ ทำท่า $thaiName ครบแล้วค่ะ', force: true);
 
         if (!mounted) return;
         Future.delayed(const Duration(seconds: 1), () {
@@ -691,6 +689,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
         });
         return;
       }
+      */
 
       setState(() {
         _exerciseCompleted = true;
@@ -710,8 +709,8 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
           context,
           MaterialPageRoute(
             builder: (context) => Chat(
-              patientId: widget.patientId, // ต้องส่งไอดีคนไข้ติดไปด้วย
-              patientName: widget.patientName, // ส่งชื่อคนไข้ไปด้วย
+              patientId: widget.patientId,
+              patientName: widget.patientName,
             ),
           ),
         );
@@ -745,7 +744,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     });
   }
 
-  // 👉 [ย้ายมาไว้ถูกต้องที่นี่] ฟังก์ชันแสดง Popup ถามยืนยันการพักชั่วคราว
   void _showPauseConfirmationDialog() {
     showDialog(
       context: context,
@@ -767,10 +765,9 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
           ),
           actionsAlignment: MainAxisAlignment.spaceEvenly,
           actions: [
-            // ปุ่มยกเลิก (อยู่หน้าเดิม)
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(); // ปิด Popup
+                Navigator.of(context).pop();
               },
               style: TextButton.styleFrom(
                 backgroundColor: Colors.white,
@@ -790,11 +787,21 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
                 ),
               ),
             ),
-            // ปุ่มยืนยันพักชั่วคราว (เด้งกลับหน้าโปรแกรม)
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pop(); // ปิด Popup
-                Navigator.pop(context); // เด้งกลับไปหน้าโปรแกรมหลัก
+                Navigator.of(context).pop(); // ปิด Dialog หน้าต่างยืนยัน
+
+                // 👉 [จุดที่ต้องแก้ตรงนี้]: ให้เปลี่ยนจาก Navigator.pop เป็นการเด้งกลับหน้าหลักพร้อมส่งค่าที่ทำไปแล้ว
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => Program(
+                      patientId: widget.patientId,
+                      patientName: widget.patientName,
+                    ),
+                  ),
+                  (route) => false, // ล้าง Stack หน้ากล้องออก ไม่ให้ค้างวนลูป
+                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4285F4),
@@ -852,7 +859,6 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
                   child: Row(
                     children: [
                       IconButton(
-                        // 👉 [อัปเดตตรงนี้] เชื่อมปุ่มย้อนกลับให้เรียก Popup
                         onPressed: () => _showPauseConfirmationDialog(),
                         icon: const Icon(
                           Icons.arrow_back_ios_new,
